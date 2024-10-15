@@ -1,0 +1,5 @@
+.vscode
+.DS_store
+old_c_version/
+db
+database_file
