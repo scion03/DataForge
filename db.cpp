@@ -107,7 +107,7 @@ void print_tree(Pager *pager, uint32_t page_num, uint32_t indentation_level)
     }
     break;
   case (NODE_INTERNAL):
-    num_keys = internal_node_num_keys(node);
+    num_keys = *internal_node_num_keys(node);
     indent(indentation_level);
     printf("- internal (size %d)\n", num_keys);
     if (num_keys > 0)
@@ -153,8 +153,7 @@ void initialize_internal_node(void *node)
 {
   set_node_type(node, NODE_INTERNAL);
   set_node_root(node, false);
-  // *internal_node_num_keys(node) = 0;
-  set_internal_node_keys(node, 0);
+  *internal_node_num_keys(node) = 0;
   /*
   Necessary because the root page number is 0; by not initializing an internal
   node's right child to an invalid page number when initializing the node, we may
@@ -206,7 +205,7 @@ uint32_t internal_node_find_child(void *node, uint32_t key)
   the given key.
   */
 
-  uint32_t num_keys = internal_node_num_keys(node);
+  uint32_t num_keys = *internal_node_num_keys(node);
 
   /* Binary search */
   uint32_t min_index = 0;
@@ -392,7 +391,7 @@ void read_input(InputBuffer *input_buffer)
 void close_input_buffer(InputBuffer *input_buffer)
 {
   free(input_buffer->buffer);
-  free(input_buffer);
+  delete input_buffer;
 }
 
 void pager_flush(Pager *pager, uint32_t page_num)
@@ -663,7 +662,7 @@ void create_new_root(Table *table, uint32_t right_child_page_num)
   if (get_node_type(left_child) == NODE_INTERNAL)
   {
     void *child;
-    for (int i = 0; i < internal_node_num_keys(left_child); i++)
+    for (int i = 0; i < *internal_node_num_keys(left_child); i++)
     {
       child = get_page(table->pager, *internal_node_child(left_child, i));
       *node_parent(child) = left_child_page_num;
@@ -675,8 +674,7 @@ void create_new_root(Table *table, uint32_t right_child_page_num)
   /* Root node is a new internal node with one key and two children */
   initialize_internal_node(root);
   set_node_root(root, true);
-  // *internal_node_num_keys(root) = 1;
-  set_internal_node_keys(root, 1);
+  *internal_node_num_keys(root) = 1;
   *internal_node_child(root, 0) = left_child_page_num;
   uint32_t left_child_max_key = get_node_max_key(table->pager, left_child);
   *internal_node_key(root, 0) = left_child_max_key;
@@ -700,7 +698,7 @@ void internal_node_insert(Table *table, uint32_t parent_page_num,
   uint32_t child_max_key = get_node_max_key(table->pager, child);
   uint32_t index = internal_node_find_child(parent, child_max_key);
 
-  uint32_t original_num_keys = internal_node_num_keys(parent);
+  uint32_t original_num_keys = *internal_node_num_keys(parent);
 
   if (original_num_keys >= INTERNAL_NODE_MAX_KEYS)
   {
@@ -725,8 +723,7 @@ void internal_node_insert(Table *table, uint32_t parent_page_num,
   and immediately calling internal_node_split_and_insert has the effect
   of creating a new key at (max_cells + 1) with an uninitialized value
   */
-  set_internal_node_keys(parent, original_num_keys + 1);
-  // *internal_node_num_keys(parent) = ;
+  *internal_node_num_keys(parent) = original_num_keys + 1;
 
   if (child_max_key > get_node_max_key(table->pager, right_child))
   {
@@ -804,7 +801,7 @@ void internal_node_split_and_insert(Table *table, uint32_t parent_page_num,
     initialize_internal_node(new_node);
   }
 
-  uint32_t old_num_keys = internal_node_num_keys(old_node);
+  uint32_t *old_num_keys = internal_node_num_keys(old_node);
 
   uint32_t cur_page_num = *internal_node_right_child(old_node);
   void *cur = get_page(table->pager, cur_page_num);
@@ -826,16 +823,15 @@ void internal_node_split_and_insert(Table *table, uint32_t parent_page_num,
     internal_node_insert(table, new_page_num, cur_page_num);
     *node_parent(cur) = new_page_num;
 
-    (old_num_keys)--;
-    set_internal_node_keys(old_node,old_num_keys);
+    (*old_num_keys)--;
   }
 
   /*
   Set child before middle key, which is now the highest key, to be node's right child,
   and decrement number of keys
   */
-  *internal_node_right_child(old_node) = *internal_node_child(old_node, old_num_keys - 1);
-  (old_num_keys)--;
+  *internal_node_right_child(old_node) = *internal_node_child(old_node, *old_num_keys - 1);
+  (*old_num_keys)--;
 
   /*
   Determine which of the two nodes after the split should contain the child to be inserted,
