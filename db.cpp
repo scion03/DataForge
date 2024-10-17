@@ -107,7 +107,7 @@ void print_tree(Pager *pager, uint32_t page_num, uint32_t indentation_level)
     }
     break;
   case (NODE_INTERNAL):
-    num_keys = *internal_node_num_keys(node);
+    num_keys = internal_node_num_keys(node);
     indent(indentation_level);
     printf("- internal (size %d)\n", num_keys);
     if (num_keys > 0)
@@ -129,16 +129,16 @@ void print_tree(Pager *pager, uint32_t page_num, uint32_t indentation_level)
 
 void serialize_row(Row *source, void *destination)
 {
-  memcpy((uint32_t *)destination + ID_OFFSET, &(source->id), ID_SIZE);
-  memcpy((uint32_t *)destination + USERNAME_OFFSET, &(source->username), USERNAME_SIZE);
-  memcpy((uint32_t *)destination + EMAIL_OFFSET, &(source->email), EMAIL_SIZE);
+  memcpy((uint8_t *)destination + ID_OFFSET, &(source->id), ID_SIZE);
+  memcpy((uint8_t *)destination + USERNAME_OFFSET, &(source->username), USERNAME_SIZE);
+  memcpy((uint8_t *)destination + EMAIL_OFFSET, &(source->email), EMAIL_SIZE);
 }
 
 void deserialize_row(void *source, Row *destination)
 {
-  memcpy(&(destination->id), (uint32_t *)source + ID_OFFSET, ID_SIZE);
-  memcpy(&(destination->username), (uint32_t *)source + USERNAME_OFFSET, USERNAME_SIZE);
-  memcpy(&(destination->email), (uint32_t *)source + EMAIL_OFFSET, EMAIL_SIZE);
+  memcpy(&(destination->id), (uint8_t *)source + ID_OFFSET, ID_SIZE);
+  memcpy(&(destination->username), (uint8_t *)source + USERNAME_OFFSET, USERNAME_SIZE);
+  memcpy(&(destination->email), (uint8_t *)source + EMAIL_OFFSET, EMAIL_SIZE);
 }
 
 void initialize_leaf_node(void *node)
@@ -153,7 +153,8 @@ void initialize_internal_node(void *node)
 {
   set_node_type(node, NODE_INTERNAL);
   set_node_root(node, false);
-  *internal_node_num_keys(node) = 0;
+  // *internal_node_num_keys(node) = 0;
+  set_internal_node_keys(node, 0);
   /*
   Necessary because the root page number is 0; by not initializing an internal
   node's right child to an invalid page number when initializing the node, we may
@@ -205,7 +206,7 @@ uint32_t internal_node_find_child(void *node, uint32_t key)
   the given key.
   */
 
-  uint32_t num_keys = *internal_node_num_keys(node);
+  uint32_t num_keys = internal_node_num_keys(node);
 
   /* Binary search */
   uint32_t min_index = 0;
@@ -662,7 +663,7 @@ void create_new_root(Table *table, uint32_t right_child_page_num)
   if (get_node_type(left_child) == NODE_INTERNAL)
   {
     void *child;
-    for (int i = 0; i < *internal_node_num_keys(left_child); i++)
+    for (int i = 0; i < internal_node_num_keys(left_child); i++)
     {
       child = get_page(table->pager, *internal_node_child(left_child, i));
       *node_parent(child) = left_child_page_num;
@@ -674,7 +675,8 @@ void create_new_root(Table *table, uint32_t right_child_page_num)
   /* Root node is a new internal node with one key and two children */
   initialize_internal_node(root);
   set_node_root(root, true);
-  *internal_node_num_keys(root) = 1;
+  // *internal_node_num_keys(root) = 1;
+  set_internal_node_keys(root, 1);
   *internal_node_child(root, 0) = left_child_page_num;
   uint32_t left_child_max_key = get_node_max_key(table->pager, left_child);
   *internal_node_key(root, 0) = left_child_max_key;
@@ -698,7 +700,7 @@ void internal_node_insert(Table *table, uint32_t parent_page_num,
   uint32_t child_max_key = get_node_max_key(table->pager, child);
   uint32_t index = internal_node_find_child(parent, child_max_key);
 
-  uint32_t original_num_keys = *internal_node_num_keys(parent);
+  uint32_t original_num_keys = internal_node_num_keys(parent);
 
   if (original_num_keys >= INTERNAL_NODE_MAX_KEYS)
   {
@@ -723,7 +725,8 @@ void internal_node_insert(Table *table, uint32_t parent_page_num,
   and immediately calling internal_node_split_and_insert has the effect
   of creating a new key at (max_cells + 1) with an uninitialized value
   */
-  *internal_node_num_keys(parent) = original_num_keys + 1;
+  set_internal_node_keys(parent, original_num_keys + 1);
+  // *internal_node_num_keys(parent) = ;
 
   if (child_max_key > get_node_max_key(table->pager, right_child))
   {
@@ -801,7 +804,7 @@ void internal_node_split_and_insert(Table *table, uint32_t parent_page_num,
     initialize_internal_node(new_node);
   }
 
-  uint32_t *old_num_keys = internal_node_num_keys(old_node);
+  uint32_t old_num_keys = internal_node_num_keys(old_node);
 
   uint32_t cur_page_num = *internal_node_right_child(old_node);
   void *cur = get_page(table->pager, cur_page_num);
@@ -823,15 +826,16 @@ void internal_node_split_and_insert(Table *table, uint32_t parent_page_num,
     internal_node_insert(table, new_page_num, cur_page_num);
     *node_parent(cur) = new_page_num;
 
-    (*old_num_keys)--;
+    (old_num_keys)--;
+    set_internal_node_keys(old_node,old_num_keys);
   }
 
   /*
   Set child before middle key, which is now the highest key, to be node's right child,
   and decrement number of keys
   */
-  *internal_node_right_child(old_node) = *internal_node_child(old_node, *old_num_keys - 1);
-  (*old_num_keys)--;
+  *internal_node_right_child(old_node) = *internal_node_child(old_node, old_num_keys - 1);
+  (old_num_keys)--;
 
   /*
   Determine which of the two nodes after the split should contain the child to be inserted,

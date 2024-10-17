@@ -3,3 +3,7 @@
 old_c_version/
 db
 database_file
+.rspec
+test.db
+Gemfile.lock
+spec

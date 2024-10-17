@@ -11,33 +11,41 @@
 
 NodeType get_node_type(void *node)
 {
-  uint8_t value = *((uint8_t *)((uint32_t *)node + NODE_TYPE_OFFSET));
+  uint8_t value = *((uint8_t *)((uint8_t *)node + NODE_TYPE_OFFSET));
   return (NodeType)value;
 }
 
 void set_node_type(void *node, NodeType type)
 {
   uint8_t value = type;
-  *((uint8_t *)((uint32_t *)node + NODE_TYPE_OFFSET)) = value;
+  *((uint8_t *)((uint8_t *)node + NODE_TYPE_OFFSET)) = value;
 }
 
 bool is_node_root(void *node)
 {
-  uint8_t value = *((uint8_t *)((uint32_t *)node + IS_ROOT_OFFSET));
+  uint8_t value = *((uint8_t *)((uint8_t *)node + IS_ROOT_OFFSET));
   return (bool)value;
 }
 
 void set_node_root(void *node, bool is_root)
 {
   uint8_t value = is_root;
-  *((uint8_t *)((uint32_t *)node + IS_ROOT_OFFSET)) = value;
+  *((uint8_t *)((uint8_t *)node + IS_ROOT_OFFSET)) = value;
 }
 
 uint32_t *node_parent(void *node) { return (uint32_t *)node + PARENT_POINTER_OFFSET; }
 
-uint32_t *internal_node_num_keys(void *node)
+uint32_t internal_node_num_keys(void *node)
 {
-  return (uint32_t *)node + INTERNAL_NODE_NUM_KEYS_OFFSET;
+  void *ptr = (char *)node + INTERNAL_NODE_NUM_KEYS_OFFSET;
+  uint32_t *dest;
+  memcpy(dest, ptr, sizeof(uint32_t));
+  return *dest;
+}
+
+void set_internal_node_keys(void *node, uint32_t val){
+  void *dest = (char *)node + INTERNAL_NODE_NUM_KEYS_OFFSET;
+  memcpy(dest, &val, sizeof(uint32_t));
 }
 
 uint32_t *internal_node_right_child(void *node)
@@ -52,7 +60,7 @@ uint32_t *internal_node_cell(void *node, uint32_t cell_num)
 
 uint32_t *internal_node_child(void *node, uint32_t child_num)
 {
-  uint32_t num_keys = *internal_node_num_keys(node);
+  uint32_t num_keys = internal_node_num_keys(node);
   if (child_num > num_keys)
   {
     printf("Tried to access child_num %d > num_keys %d\n", child_num, num_keys);
@@ -82,7 +90,7 @@ uint32_t *internal_node_child(void *node, uint32_t child_num)
 
 uint32_t *internal_node_key(void *node, uint32_t key_num)
 {
-  return internal_node_cell(node, key_num) + INTERNAL_NODE_CHILD_SIZE;
+  return reinterpret_cast<uint32_t *>( (char *)internal_node_cell(node, key_num) + INTERNAL_NODE_CHILD_SIZE);
 }
 
 uint32_t *leaf_node_num_cells(void *node)
